@@ -1,36 +1,35 @@
 import AppKit
 import OSLog
+import ServiceManagement
 
 let logger = Logger(subsystem: "com.user.audiomonitor", category: "Launcher")
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        logger.info("Launcher started. Attempting to launch helper...")
+        logger.info("Launcher started.")
 
-        // Assume the helper is in Contents/MacOS alongside the launcher
-        let bundleURL = Bundle.main.bundleURL
-        let helperURL = bundleURL.appending(path: "Contents/MacOS/AudioMonitorHelper")
+        do {
+            // Check the current status of the background service
+            let service = SMAppService.loginItem(
+                identifier: "com.user.audiomonitor.AudioMonitorHelper")
 
-        // Check if helper is already running to avoid launching duplicates
-        let processName = "AudioMonitorHelper"
-        let runningApps = NSWorkspace.shared.runningApplications
-        let isAlreadyRunning = runningApps.contains { $0.localizedName == processName }
-
-        if isAlreadyRunning {
-            logger.warning("Helper process is already running. Launcher will exit.")
-        } else {
-            do {
-                try Process.run(helperURL, arguments: [])
-                logger.info("Successfully launched helper process.")
-            } catch {
-                logger.error(
-                    "Failed to launch helper: \(error.localizedDescription, privacy: .public)")
+            if service.status == .enabled {
+                logger.info("Background service is already enabled. Nothing to do.")
+            } else {
+                // If not enabled, register and enable it.
+                try service.register()
+                logger.info("Successfully registered and enabled the background service.")
             }
+        } catch {
+            logger.error(
+                "Failed to register background service: \(error.localizedDescription, privacy: .public)"
+            )
         }
 
         logger.info("Launcher has completed its task. Exiting.")
         NSApplication.shared.terminate(self)
     }
+
 }
 
 let app = NSApplication.shared

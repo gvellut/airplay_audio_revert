@@ -5,19 +5,17 @@ let package = Package(
     name: "AudioMonitor",
     platforms: [.macOS(.v14)],
     targets: [
-        // The background worker - same as before
+        // The helper is just a normal executable from SPM's perspective.
         .executableTarget(
             name: "AudioMonitorHelper",
             linkerSettings: [
                 .linkedFramework("CoreAudio")
             ]
         ),
-        // The new, windowless launcher application
+        // The main application is also a normal executable.
         .executableTarget(
             name: "AudioMonitorLauncher",
-            dependencies: [],
             linkerSettings: [
-                // It needs AppKit to behave like an application
                 .linkedFramework("AppKit")
             ]
         ),

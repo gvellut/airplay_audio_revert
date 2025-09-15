@@ -73,8 +73,9 @@ struct AudioMonitorHelper {
             mElement: kAudioObjectPropertyElementMain)  // DEPRECATION FIX
         var deviceName: CFString = "" as CFString
         var propertySize = UInt32(MemoryLayout<CFString>.size)
-        let status = AudioObjectGetPropertyData(
-            deviceID, &address, 0, nil, &propertySize, &deviceName)
+        let status = withUnsafeMutablePointer(to: &deviceName) {
+            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &propertySize, $0)
+        }
         return status == noErr ? (deviceName as String) : nil
     }
 

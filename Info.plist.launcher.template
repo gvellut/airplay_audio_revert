@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
-	<string>__FINAL_EXE_NAME__</string>
+	<string>AudioMonitorLauncher</string>
 	<key>CFBundleIdentifier</key>
-	<string>__BUNDLE_ID__</string>
+	<string>__LAUNCHER_BUNDLE_ID__</string>
 	<key>LSUIElement</key>
 	<true/>
 </dict>

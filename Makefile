@@ -1,20 +1,11 @@
 # =============================================================================
-# Makefile for AudioMonitor
-#
-# Targets:
-#   make app          - Build the .app bundle in release mode (default).
-#   make debug        - Build the .app bundle in debug mode.
-#   make install      - Build the release .app and install it to ~/Applications.
-#   make uninstall    - Remove the app and its Login Item.
-#   make clean        - Remove all build artifacts.
+# Makefile for AudioMonitor (with Temporary Plist Generation)
 # =============================================================================
 
 # --- Configuration ---
-# Load configuration from file
 CONFIG_FILE = app_config.env
 include $(CONFIG_FILE)
 
-# Build configuration (debug or release).
 BUILD_MODE ?= release
 ifeq ($(BUILD_MODE),debug)
     SWIFT_BUILD_FLAGS =
@@ -25,33 +16,37 @@ else
 endif
 
 # --- Paths and Artifacts ---
-# Staging directory for the .app bundle
 APP_BUILD_DIR = .build/appBuild/$(BUILD_MODE)
 APP_BUNDLE = $(APP_BUILD_DIR)/$(APP_NAME).app
 
-# Discover all .swift source files recursively for dependency tracking
 ALL_SWIFT_FILES = $(shell find Sources -name '*.swift')
 
-# Swift build artifacts
 LAUNCHER_EXE_NAME = AudioMonitorLauncher
 HELPER_EXE_NAME = AudioMonitorHelper
 SWIFT_LAUNCHER_EXE = $(SWIFT_BUILD_DIR)/$(LAUNCHER_EXE_NAME)
 SWIFT_HELPER_EXE = $(SWIFT_BUILD_DIR)/$(HELPER_EXE_NAME)
 
-# Bundle paths
 BUNDLE_MACOS_DIR = $(APP_BUNDLE)/Contents/MacOS
-BUNDLE_PLIST = $(APP_BUNDLE)/Contents/Info.plist
-PLIST_TEMPLATE = Info.plist.template
+BUNDLE_LOGINITEMS_DIR = $(APP_BUNDLE)/Contents/Library/LoginItems
+HELPER_APP_BUNDLE = $(BUNDLE_LOGINITEMS_DIR)/$(HELPER_EXE_NAME).app
 
-# Final installation paths
+# Define temporary locations for the generated plists, next to the .app bundle
+TEMP_LAUNCHER_PLIST = $(APP_BUILD_DIR)/launcher.plist.tmp
+TEMP_HELPER_PLIST = $(APP_BUILD_DIR)/helper.plist.tmp
+
+# Define the final locations for the plists inside the .app bundle
+FINAL_LAUNCHER_PLIST = $(APP_BUNDLE)/Contents/Info.plist
+FINAL_HELPER_PLIST = $(HELPER_APP_BUNDLE)/Contents/Info.plist
+
+LAUNCHER_PLIST_TEMPLATE = Info.plist.launcher.template
+HELPER_PLIST_TEMPLATE = Info.plist.helper.template
+
 FINAL_INSTALL_DIR = $(HOME)/Applications
 FINAL_APP_PATH = $(FINAL_INSTALL_DIR)/$(APP_NAME).app
 
-# Phony targets are actions, not files
 .PHONY: all app debug install uninstall clean
 
 # --- Main Targets ---
-
 all: app
 app: $(APP_BUNDLE)
 debug:
@@ -62,14 +57,13 @@ install: app
 	@mkdir -p $(FINAL_INSTALL_DIR)
 	@rm -rf $(FINAL_APP_PATH)
 	@cp -R $(APP_BUNDLE) $(FINAL_INSTALL_DIR)/
-# 	@echo "--- Adding application to Login Items ---"
-# 	@osascript -e 'tell application "System Events" to delete login item "$(APP_NAME)"' 2>/dev/null || true
-# 	@osascript -e 'tell application "System Events" to make new login item at end with properties {path:"$(FINAL_APP_PATH)", hidden:false}'
+	@echo ""
 	@echo "--- ✅ Installation complete ---"
+	@echo "--- IMPORTANT: To activate the background service, please run '$(APP_NAME)' from your Applications folder ONCE. ---"
 
 uninstall:
-	@echo "--- Removing application from Login Items ---"
-	@osascript -e 'tell application "System Events" to delete login item "$(APP_NAME)"' 2>/dev/null || true
+	@echo "--- Unregistering and disabling the background service ---"
+	@/System/Library/Frameworks/ServiceManagement.framework/Versions/A/Resources/smctl disable login/$(HELPER_BUNDLE_ID) 2>/dev/null || true
 	@echo "--- Stopping any running helper process ---"
 	@pkill -f $(HELPER_EXE_NAME) || true
 	@echo "--- Deleting application bundle ---"
@@ -78,29 +72,43 @@ uninstall:
 
 # --- Build Recipes ---
 
-# Create the .app bundle. It now depends on the REAL executable files.
-$(APP_BUNDLE): $(SWIFT_LAUNCHER_EXE) $(SWIFT_HELPER_EXE) $(BUNDLE_PLIST)
+# RECIPE 1: The App Bundle.
+# Depends on the EXECUTABLES and the TEMPORARY plist files.
+$(APP_BUNDLE): $(SWIFT_LAUNCHER_EXE) $(SWIFT_HELPER_EXE) $(TEMP_LAUNCHER_PLIST) $(TEMP_HELPER_PLIST)
 	@echo "--- Assembling application bundle: $(APP_BUNDLE) ---"
+	# Start with a completely clean slate
+	@rm -rf $(APP_BUNDLE)
+	# Create the full directory structure
 	@mkdir -p $(BUNDLE_MACOS_DIR)
+	@mkdir -p $(HELPER_APP_BUNDLE)/Contents/MacOS
+	# Copy the pre-built executables and plists into the new bundle
 	@cp $(SWIFT_LAUNCHER_EXE) $(BUNDLE_MACOS_DIR)/
-	@cp $(SWIFT_HELPER_EXE) $(BUNDLE_MACOS_DIR)/
+	@cp $(SWIFT_HELPER_EXE) $(HELPER_APP_BUNDLE)/Contents/MacOS/
+	@cp $(TEMP_LAUNCHER_PLIST) $(FINAL_LAUNCHER_PLIST)
+	@cp $(TEMP_HELPER_PLIST) $(FINAL_HELPER_PLIST)
 	@echo "--- Applying an ad-hoc signature to the app bundle ---"
-	@codesign --force --deep --sign - $(APP_BUNDLE)
+	@codesign --force --deep --sign "My Swift Dev Cert" $(APP_BUNDLE)
 	@echo "--- ✅ App bundle created successfully ---"
 
-# Generate the Info.plist from the template and config file.
-$(BUNDLE_PLIST): $(PLIST_TEMPLATE) $(CONFIG_FILE)
-	@echo "--- Generating Info.plist ---"
-	@mkdir -p $(APP_BUNDLE)/Contents
-	@sed -e 's/__FINAL_EXE_NAME__/$(FINAL_EXE_NAME)/g' \
-	     -e 's/__BUNDLE_ID__/$(BUNDLE_ID)/g' \
-	     $(PLIST_TEMPLATE) > $(BUNDLE_PLIST)
-
+# RECIPE 2: The Swift Executables.
 $(SWIFT_LAUNCHER_EXE) $(SWIFT_HELPER_EXE): $(ALL_SWIFT_FILES)
-	@echo "--- Building Swift executables in $(BUILD_MODE) mode ---"
+	@echo "--- Building Swift executables (if needed)... ---"
 	@swift build $(SWIFT_BUILD_FLAGS)
 
-# Clean up all build artifacts
+# RECIPE 3: The TEMPORARY Launcher plist.
+$(TEMP_LAUNCHER_PLIST): $(LAUNCHER_PLIST_TEMPLATE) $(CONFIG_FILE)
+	@echo "--- Generating temporary Launcher Info.plist ---"
+	@mkdir -p $(APP_BUILD_DIR)
+	@sed -e 's/__LAUNCHER_BUNDLE_ID__/$(LAUNCHER_BUNDLE_ID)/g' \
+	     $(LAUNCHER_PLIST_TEMPLATE) > $(TEMP_LAUNCHER_PLIST)
+
+# RECIPE 4: The TEMPORARY Helper plist.
+$(TEMP_HELPER_PLIST): $(HELPER_PLIST_TEMPLATE) $(CONFIG_FILE)
+	@echo "--- Generating temporary Helper Info.plist ---"
+	@mkdir -p $(APP_BUILD_DIR)
+	@sed -e 's/__HELPER_BUNDLE_ID__/$(HELPER_BUNDLE_ID)/g' \
+	     $(HELPER_PLIST_TEMPLATE) > $(TEMP_HELPER_PLIST)
+
 clean:
 	@echo "--- Cleaning up all build artifacts ---"
 	@swift package clean

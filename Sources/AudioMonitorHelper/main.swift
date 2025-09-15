@@ -10,36 +10,68 @@ struct AudioMonitorHelper {
     static func main() async {
         logger.info("AudioMonitorHelper service starting up.")
 
-        guard let builtInDeviceID = findBuiltInDeviceID(),
-            let builtInDeviceName = getDeviceName(deviceID: builtInDeviceID)
+        var preferredDeviceID: AudioDeviceID?
+        var preferredDeviceName: String?
+
+        // Determine the preferred device, avoiding AirPlay at startup.
+        if let (initialDeviceID, initialDeviceName) = getDefaultOutputDevice(),
+            getDeviceTransportType(deviceID: initialDeviceID) != "airp"
+        {
+            // The current device is not AirPlay, so use it as preferred.
+            preferredDeviceID = initialDeviceID
+            preferredDeviceName = initialDeviceName
+            logger.info(
+                "Initial audio device is not AirPlay. Setting '\(preferredDeviceName ?? "Unknown")' as preferred device."
+            )
+        } else {
+            // Current device is AirPlay or couldn't be determined. Fall back to a suitable device.
+            if getDeviceTransportType(deviceID: getDefaultOutputDevice()?.id ?? 0) == "airp" {
+                logger.warning(
+                    "Initial audio device is an AirPlay device. Falling back to Bluetooth or built-in speakers."
+                )
+            }
+            // Prioritize Bluetooth, then built-in.
+            if let (id, name) = findFirstAvailableDevice(transportTypes: ["blue", "bltn"]) {
+                preferredDeviceID = id
+                preferredDeviceName = name
+            }
+        }
+
+        guard var finalDeviceID = preferredDeviceID, var finalDeviceName = preferredDeviceName
         else {
-            logger.error("CRITICAL: Could not find built-in audio device. Exiting.")
+            logger.error("CRITICAL: Could not establish a preferred audio device. Exiting.")
             return
         }
-        logger.info("Found built-in speakers: '\(builtInDeviceName)'")
+
+        logger.info("Preferred device set to: '\(finalDeviceName)'")
 
         let stream = createDefaultDeviceWatcherStream()
         logger.info("Successfully registered audio device listener. Monitoring for changes...")
 
         for await _ in stream {
-            handleDeviceChange(
-                builtInDeviceID: builtInDeviceID, builtInDeviceName: builtInDeviceName)
-        }
-    }
+            guard let (currentDeviceID, currentDeviceName) = getDefaultOutputDevice() else {
+                continue
+            }
 
-    static func handleDeviceChange(builtInDeviceID: AudioDeviceID, builtInDeviceName: String) {
-        guard let (currentDeviceID, _) = getDefaultOutputDevice() else { return }
-
-        if let transportType = getDeviceTransportType(deviceID: currentDeviceID),
-            let deviceName = getDeviceName(deviceID: currentDeviceID)
-        {
-
-            logger.log("Default audio output changed to: '\(deviceName)' (Type: \(transportType))")
-
-            if transportType == "airp" {
-                logger.notice("AirPlay device detected. Switching back to built-in speakers...")
-                setDefaultOutputDevice(deviceID: builtInDeviceID)
-                logger.info("Audio output switched back to: '\(builtInDeviceName)'")
+            if getDeviceTransportType(deviceID: currentDeviceID) == "airp" {
+                // The new device is an AirPlay device.
+                if currentDeviceID != finalDeviceID {
+                    logger.log(
+                        "Default audio output changed to AirPlay device: '\(currentDeviceName ?? "Unknown")'"
+                    )
+                    logger.notice("Switching back to preferred device...")
+                    setDefaultOutputDevice(deviceID: finalDeviceID)
+                    logger.info("Audio output switched back to: '\(finalDeviceName)'")
+                }
+            } else {
+                // The new device is NOT an AirPlay device. Update our preferred device.
+                if currentDeviceID != finalDeviceID {
+                    finalDeviceID = currentDeviceID
+                    finalDeviceName = currentDeviceName ?? "Unknown"
+                    logger.info(
+                        "Default audio device changed to a non-AirPlay device. Updating preferred device to: '\(finalDeviceName)'"
+                    )
+                }
             }
         }
     }
@@ -96,10 +128,12 @@ struct AudioMonitorHelper {
         return nil
     }
 
-    static func findBuiltInDeviceID() -> AudioDeviceID? {
+    static func findFirstAvailableDevice(transportTypes: [String]) -> (
+        id: AudioDeviceID, name: String
+    )? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)  // DEPRECATION FIX
+            mElement: kAudioObjectPropertyElementMain)
         var propertySize: UInt32 = 0
         guard
             AudioObjectGetPropertyDataSize(
@@ -112,17 +146,30 @@ struct AudioMonitorHelper {
                 AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &deviceIDs
             ) == noErr
         else { return nil }
-        for deviceID in deviceIDs {
-            if getDeviceTransportType(deviceID: deviceID) == "bltn" {
-                var outputAddress = AudioObjectPropertyAddress(
-                    mSelector: kAudioDevicePropertyStreamConfiguration,
-                    mScope: kAudioObjectPropertyScopeOutput, mElement: 0)
-                var bufferListSize: UInt32 = 0
-                AudioObjectGetPropertyDataSize(deviceID, &outputAddress, 0, nil, &bufferListSize)
-                if bufferListSize > 0 { return deviceID }
+
+        for transportType in transportTypes {
+            for deviceID in deviceIDs {
+                if getDeviceTransportType(deviceID: deviceID) == transportType {
+                    // Check if it's an output device
+                    var outputAddress = AudioObjectPropertyAddress(
+                        mSelector: kAudioDevicePropertyStreamConfiguration,
+                        mScope: kAudioObjectPropertyScopeOutput, mElement: 0)
+                    var bufferListSize: UInt32 = 0
+                    AudioObjectGetPropertyDataSize(
+                        deviceID, &outputAddress, 0, nil, &bufferListSize)
+                    if bufferListSize > 0 {
+                        if let deviceName = getDeviceName(deviceID: deviceID) {
+                            return (deviceID, deviceName)
+                        }
+                    }
+                }
             }
         }
         return nil
+    }
+
+    static func findBuiltInDeviceID() -> AudioDeviceID? {
+        return findFirstAvailableDevice(transportTypes: ["bltn"])?.id
     }
 
     static func setDefaultOutputDevice(deviceID: AudioDeviceID) {

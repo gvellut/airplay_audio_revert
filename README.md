@@ -29,7 +29,7 @@ To install the app to your `~/Applications` folder:
 make install
 ```
 
-After installation, run the app once from your Applications folder to activate the background service. Manage in *Login Items > Allow in the Background*
+After installation, run the app once from your Applications folder to activate the background service. Manage in *Login Items > Allow in the Background*.
 
 ## Uninstall
 
@@ -38,3 +38,10 @@ To remove the app and disable the helper:
 ```sh
 make uninstall
 ```
+
+
+## Note
+
+Log with `console.app` :
+
+`log stream --debug --info --predicate "subsystem = 'com.user.audiomonitor'"`

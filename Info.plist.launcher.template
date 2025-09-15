@@ -8,5 +8,15 @@
 	<string>__LAUNCHER_BUNDLE_ID__</string>
 	<key>LSUIElement</key>
 	<true/>
+
+	<!-- THIS IS THE CRITICAL, MISSING KEY -->
+	<key>SMAppService</key>
+	<dict>
+		<key>LoginItems</key>
+		<array>
+			<!-- This must contain the exact bundle ID of your helper -->
+			<string>__HELPER_BUNDLE_ID__</string>
+		</array>
+	</dict>
 </dict>
 </plist>

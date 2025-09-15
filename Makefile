@@ -1,7 +1,3 @@
-# =============================================================================
-# Makefile for AudioMonitor (with Temporary Plist Generation)
-# =============================================================================
-
 # --- Configuration ---
 CONFIG_FILE = app_config.env
 include $(CONFIG_FILE)
@@ -48,7 +44,9 @@ FINAL_APP_PATH = $(FINAL_INSTALL_DIR)/$(APP_NAME).app
 
 # --- Main Targets ---
 all: app
+
 app: $(APP_BUNDLE)
+
 debug:
 	@$(MAKE) BUILD_MODE=debug app
 
@@ -63,7 +61,6 @@ install: app
 
 uninstall:
 	@echo "--- Unregistering and disabling the background service ---"
-	@/System/Library/Frameworks/ServiceManagement.framework/Versions/A/Resources/smctl disable login/$(HELPER_BUNDLE_ID) 2>/dev/null || true
 	@echo "--- Stopping any running helper process ---"
 	@pkill -f $(HELPER_EXE_NAME) || true
 	@echo "--- Deleting application bundle ---"
@@ -96,10 +93,12 @@ $(SWIFT_LAUNCHER_EXE) $(SWIFT_HELPER_EXE): $(ALL_SWIFT_FILES)
 	@swift build $(SWIFT_BUILD_FLAGS)
 
 # RECIPE 3: The TEMPORARY Launcher plist.
+# THIS RECIPE IS NOW UPDATED
 $(TEMP_LAUNCHER_PLIST): $(LAUNCHER_PLIST_TEMPLATE) $(CONFIG_FILE)
 	@echo "--- Generating temporary Launcher Info.plist ---"
 	@mkdir -p $(APP_BUILD_DIR)
 	@sed -e 's/__LAUNCHER_BUNDLE_ID__/$(LAUNCHER_BUNDLE_ID)/g' \
+	     -e 's/__HELPER_BUNDLE_ID__/$(HELPER_BUNDLE_ID)/g' \
 	     $(LAUNCHER_PLIST_TEMPLATE) > $(TEMP_LAUNCHER_PLIST)
 
 # RECIPE 4: The TEMPORARY Helper plist.

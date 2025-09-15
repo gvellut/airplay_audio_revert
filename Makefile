@@ -62,9 +62,9 @@ install: app
 	@mkdir -p $(FINAL_INSTALL_DIR)
 	@rm -rf $(FINAL_APP_PATH)
 	@cp -R $(APP_BUNDLE) $(FINAL_INSTALL_DIR)/
-	@echo "--- Adding application to Login Items ---"
-	@osascript -e 'tell application "System Events" to delete login item "$(APP_NAME)"' 2>/dev/null || true
-	@osascript -e 'tell application "System Events" to make new login item at end with properties {path:"$(FINAL_APP_PATH)", hidden:false}'
+# 	@echo "--- Adding application to Login Items ---"
+# 	@osascript -e 'tell application "System Events" to delete login item "$(APP_NAME)"' 2>/dev/null || true
+# 	@osascript -e 'tell application "System Events" to make new login item at end with properties {path:"$(FINAL_APP_PATH)", hidden:false}'
 	@echo "--- ✅ Installation complete ---"
 
 uninstall:

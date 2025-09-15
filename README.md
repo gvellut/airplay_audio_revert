@@ -5,7 +5,7 @@ AudioMonitor is a macOS utility that monitors audio devices and can revert audio
 ## Purpose
 
 - Monitors system audio device changes.
-- Automatically reverts audio output to a preferred device when AirPlay connects.
+- Automatically reverts audio output to the previous device when AirPlay connects.
 - Includes a launcher and a helper for background monitoring.
 
 ## Build
@@ -29,7 +29,7 @@ To install the app to your `~/Applications` folder:
 make install
 ```
 
-After installation, run the app once from your Applications folder to activate the background service. Manage in Login Items > Allow in the Background
+After installation, run the app once from your Applications folder to activate the background service. Manage in *Login Items > Allow in the Background*
 
 ## Uninstall
 

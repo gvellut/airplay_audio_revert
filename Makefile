@@ -84,7 +84,7 @@ $(APP_BUNDLE): $(SWIFT_LAUNCHER_EXE) $(SWIFT_HELPER_EXE) $(TEMP_LAUNCHER_PLIST) 
 	@cp $(TEMP_LAUNCHER_PLIST) $(FINAL_LAUNCHER_PLIST)
 	@cp $(TEMP_HELPER_PLIST) $(FINAL_HELPER_PLIST)
 	@echo "--- Applying an ad-hoc signature to the app bundle ---"
-	@codesign --force --deep --sign "My Swift Dev Cert" $(APP_BUNDLE)
+	@codesign --force --deep --sign $(SIGNING_CERT) $(APP_BUNDLE)
 	@echo "--- ✅ App bundle created successfully ---"
 
 # RECIPE 2: The Swift Executables.
